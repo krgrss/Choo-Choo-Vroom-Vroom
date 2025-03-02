@@ -18,6 +18,12 @@ from evaluation import (
     plot_confusion_matrix, regression_error_plot,
     plot_time_series_predictions, plot_geographical_route_risk
 )
+
+from visualization import (
+    predict_risk_for_map, plot_risk_map, 
+    create_heatmap_with_markers, create_subway_heatmap_from_excel
+)
+
 from sklearn.metrics import confusion_matrix
 
 def main():
@@ -65,25 +71,40 @@ def main():
         return
     reg_model = train_regression_model(X_reg, y_reg)
 
-    # Optionally, add example time-series / route risk visualization
-    ts_data = {
-        "timestamp": pd.date_range("2024-01-01", periods=24, freq="H"),
-        "actual_delay": [10, 5, 0, 12, 8, 15, 5, 3, 20, 10, 7, 5, 8, 12, 15, 0, 4, 10, 6, 8, 12, 5, 7, 10],
-        "predicted_delay": [8, 7, 0, 10, 9, 13, 6, 4, 18, 11, 8, 6, 10, 11, 14, 0, 3, 9, 7, 10, 11, 4, 6, 9]
-    }
-    ts_df = pd.DataFrame(ts_data)
-    plot_time_series_predictions(ts_df["timestamp"], ts_df["actual_delay"], ts_df["predicted_delay"])
+    # A) RISK MAP using your XGBoost classifier's predicted probability
+    # ------------------------------------------------------------
+    #  If you want to see "predicted risk" of delay at each lat/lon:
+    risk_df = predict_risk_for_map(enriched_df, clf_model)
+    # risk_df will have columns: [lat, lon, predicted_risk, mode, location, ...]
+    # Now we plot it:
+    plot_risk_map(risk_df, location_col="location", output_html="bus_risk_map.html")
+    # => This saves an HTML map at bus_risk_map.html
 
-    route_data = [
-        {"location": "Route 1", "lat": 43.67, "lon": -79.39, "risk": 0.8},
-        {"location": "Route 2", "lat": 43.65, "lon": -79.38, "risk": 0.3},
-        {"location": "Route 3", "lat": 43.66, "lon": -79.40, "risk": 0.6},
-    ]
-    map_obj = plot_geographical_route_risk(route_data)
-    map_obj.save("geographical_route_risk.html")
-    print("Geographical route risk map saved to 'geographical_route_risk.html'.")
+    # B) HEATMAP for all modes (bus/streetcar/subway) from enriched_df
+    # ------------------------------------------------------------
+    # We'll do a simple incident-based heatmap. "create_heatmap_with_markers" groups by "location"
+    # and sums how many rows appear at each lat/lon.
+    create_heatmap_with_markers(
+        df=enriched_df,
+        lat_col="stop_lat",
+        lon_col="stop_lon",
+        location_col="location",
+        output_html="all_modes_heatmap.html"
+    )
+    # => This saves "all_modes_heatmap.html"
 
-    print("\n=== Pipeline complete ===")
+    # C) SUBWAY LAT/LON from an Excel file
+    # ------------------------------------------------------------
+    # If you specifically want to create a separate map using the "subway_latlon.xlsx" approach:
+    create_subway_heatmap_from_excel(
+        incidents_csv="data/subway-data.csv",
+        latlon_xlsx="data/subway_latlon.xlsx",
+        output_html="subway_heatmap.html"
+    )
+    # => This merges your raw subway CSV with station coords from the Excel, 
+    #    then produces "subway_heatmap.html".
+
+    print("=== Pipeline and visualization steps complete. ===")
 
 if __name__ == "__main__":
     main()
