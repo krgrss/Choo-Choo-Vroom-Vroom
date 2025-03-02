@@ -143,8 +143,9 @@ This is the final combined visualization:
 # Sources
 
 Open Data Toronto​ - tellingstorieswithdata.com
+                  - toronto.ca/city-government/data-research-maps/open-data/
 
-Weather features - [openreview.net](https://open-meteo.com)
+Weather features - open-meteo.com
 
 streetcar delay - cs229.stanford.edu & ionnoant.github.io
 
