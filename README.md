@@ -106,7 +106,7 @@ After preparing the data, the classification function splits the dataset into tr
 
 <img width="705" alt="Image" src="https://github.com/user-attachments/assets/f7ff38e9-925d-4afe-b322-eeab168520bd" />
 
-The result are visually represented as shown below 
+The result are visually represented as shown below. As we can see our result achieved up to 80% accuracy.
 
 ![Image](https://github.com/user-attachments/assets/f69ee537-ab50-4ba1-8060-f2a3751cb7e2)
 
@@ -124,6 +124,8 @@ This is shown below where the risk factor is in the range from 0 to 1
 
 ![Image](https://github.com/user-attachments/assets/e844b507-cc3f-4480-b774-c7d1181ce43f)
 
+![Image](https://github.com/user-attachments/assets/d903af93-4d99-4486-86b4-c7b23cc5ff8b)
+
 # Final Data Visualization
 
 Diamater - minute delayed
@@ -133,12 +135,16 @@ Here we are able to remodel the vizualization to the figure below:
 
 ![Image](https://github.com/user-attachments/assets/f8b96282-91bd-47a0-933a-4273dc58c664)
 
-This is the final combined visualization with 
+This is the final combined visualization:
+
+<img width="871" alt="Image" src="https://github.com/user-attachments/assets/3caf3d81-fe2d-4305-a5ab-02a2adb59ee4" />
+
+
 # Sources
 
 Open Data Toronto​ - tellingstorieswithdata.com
 
-Weather features - open-meteo.com
+Weather features - [openreview.net](https://open-meteo.com)
 
 streetcar delay - cs229.stanford.edu & ionnoant.github.io
 
