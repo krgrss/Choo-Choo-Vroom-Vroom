@@ -21,7 +21,13 @@ from evaluation import (
 
 from visualization import (
     predict_risk_for_map, plot_risk_map, 
-    create_heatmap_with_markers, create_subway_heatmap_from_excel
+    create_heatmap_with_markers, create_subway_heatmap_from_excel,
+    plot_actual_vs_predicted,
+    plot_most_delay_by_mode,
+    plot_place_most_delay,
+    plot_day_of_week_most_delay,
+    plot_relation_weather_delay,
+    plot_when_most_delay_per_day
 )
 
 from sklearn.metrics import confusion_matrix
@@ -103,6 +109,13 @@ def main():
     )
     # => This merges your raw subway CSV with station coords from the Excel, 
     #    then produces "subway_heatmap.html".
+
+    plot_actual_vs_predicted(combined_df, actual_col="delay_minutes", predicted_col="my_model_prediction")
+    plot_most_delay_by_mode(combined_df)
+    plot_place_most_delay(combined_df)
+    plot_day_of_week_most_delay(combined_df)
+    plot_relation_weather_delay(combined_df, weather_col="temperature_2m")
+    plot_when_most_delay_per_day(combined_df, time_col="timestamp")
 
     print("=== Pipeline and visualization steps complete. ===")
 
