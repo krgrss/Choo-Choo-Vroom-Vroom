@@ -150,9 +150,9 @@ def load_subway_data(subway_path="data/subway-data.csv", codes_map=None):
     return df_sub
 
 
-def load_stops(stops_path="data/external/stops.csv"):
+def load_stops(stops_path="data/external/gtfs/stops.txt"):
     """
-    Loads the stops dataset, which contains:
+    Loads the GTFS stops dataset, which contains:
       stop_id, stop_code, stop_name, stop_desc, stop_lat, stop_lon, ...
     Returns a DataFrame with at least columns: [stop_name, stop_lat, stop_lon].
     """
@@ -160,8 +160,9 @@ def load_stops(stops_path="data/external/stops.csv"):
         print(f"Stops file not found at {stops_path}. Returning empty DataFrame.")
         return pd.DataFrame(columns=["stop_name", "stop_lat", "stop_lon"])
 
-    stops_df = pd.read_csv(stops_path)
-    # Keep only the columns we need for merging:
+    # Read the stops.txt file, which is typically tab-delimited in GTFS
+    stops_df = pd.read_csv(stops_path, sep='\t')  # Use tab as delimiter for .txt files
+    # Keep only the columns we need for merging
     stops_df = stops_df[["stop_name", "stop_lat", "stop_lon"]].copy()
 
     # Convert lat/lon to numeric (in case they're read as strings)
@@ -169,7 +170,6 @@ def load_stops(stops_path="data/external/stops.csv"):
     stops_df["stop_lon"] = pd.to_numeric(stops_df["stop_lon"], errors="coerce")
 
     return stops_df
-
 
 def unify_datasets(bus_df, streetcar_df, subway_df):
     """
@@ -209,7 +209,7 @@ def main_preprocessing(
     streetcar_path="data/streetcar-data.csv",
     subway_path="data/subway-data.csv",
     codes_path="data/subway-delay-codes.csv",
-    stops_path="data/external/stops.csv"
+    stops_path="data/external/gtfs/stops.txt"
 ):
     """
     Main function to read all data sources and return a single combined DataFrame
@@ -217,7 +217,7 @@ def main_preprocessing(
     """
     # 1) Load the subway code map
     codes_map = load_subway_codes(codes_path)
-    stops_df = load_stops(stops_path=stops_path)
+    stops_df = load_stops(stops_path)
 
     # 2) Load each dataset
     df_bus = load_bus_data(bus_path)
@@ -240,4 +240,4 @@ if __name__ == "__main__":
     # Example usage
     combined = main_preprocessing()
     print("Combined dataset shape:", combined.shape)
-    print(combined.head(10))
+    print(combined.head(30))

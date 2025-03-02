@@ -161,8 +161,7 @@ if __name__ == "__main__":
         bus_path="data/bus-data.csv",
         streetcar_path="data/streetcar-data.csv",
         subway_path="data/subway-data.csv",
-        codes_path="data/subway-delay-codes.csv",
-        stops_path="data\external\gtfs\stops.txt"
+        codes_path="data/subway-delay-codes.csv"
     )
     # 2) Feature Engineering
     enriched_df = feature_engineering_pipeline(combined_df)
