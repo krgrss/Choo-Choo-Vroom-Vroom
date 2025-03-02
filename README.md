@@ -138,7 +138,7 @@ This is the final combined visualization with
 
 Open Data Toronto​ - tellingstorieswithdata.com
 
-Weather features - openreview.net
+Weather features - open-meteo.com
 
 streetcar delay - cs229.stanford.edu & ionnoant.github.io
 
