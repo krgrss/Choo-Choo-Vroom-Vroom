@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy as np
+import os
 
 def load_subway_codes(codes_path="data/subway-delay-codes.csv"):
     """
@@ -14,7 +15,7 @@ def load_subway_codes(codes_path="data/subway-delay-codes.csv"):
     # etc.
 
     # Create a dictionary: {"EUBK": "Brakes", ...}
-    code_map = dict(zip(codes_df["Code"], codes_df["Code Description"]))
+    code_map = dict(zip(codes_df["SUB RMENU CODE"], codes_df["CODE DESCRIPTION"]))
     return code_map
 
 
@@ -149,6 +150,27 @@ def load_subway_data(subway_path="data/subway-data.csv", codes_map=None):
     return df_sub
 
 
+def load_stops(stops_path="data/external/stops.csv"):
+    """
+    Loads the stops dataset, which contains:
+      stop_id, stop_code, stop_name, stop_desc, stop_lat, stop_lon, ...
+    Returns a DataFrame with at least columns: [stop_name, stop_lat, stop_lon].
+    """
+    if not os.path.exists(stops_path):
+        print(f"Stops file not found at {stops_path}. Returning empty DataFrame.")
+        return pd.DataFrame(columns=["stop_name", "stop_lat", "stop_lon"])
+
+    stops_df = pd.read_csv(stops_path)
+    # Keep only the columns we need for merging:
+    stops_df = stops_df[["stop_name", "stop_lat", "stop_lon"]].copy()
+
+    # Convert lat/lon to numeric (in case they're read as strings)
+    stops_df["stop_lat"] = pd.to_numeric(stops_df["stop_lat"], errors="coerce")
+    stops_df["stop_lon"] = pd.to_numeric(stops_df["stop_lon"], errors="coerce")
+
+    return stops_df
+
+
 def unify_datasets(bus_df, streetcar_df, subway_df):
     """
     Combines bus, streetcar, and subway data into a single DataFrame with consistent columns.
@@ -186,7 +208,8 @@ def main_preprocessing(
     bus_path="data/bus-data.csv",
     streetcar_path="data/streetcar-data.csv",
     subway_path="data/subway-data.csv",
-    codes_path="data/subway-delay-codes.csv"
+    codes_path="data/subway-delay-codes.csv",
+    stops_path="data/external/stops.csv"
 ):
     """
     Main function to read all data sources and return a single combined DataFrame
@@ -194,6 +217,7 @@ def main_preprocessing(
     """
     # 1) Load the subway code map
     codes_map = load_subway_codes(codes_path)
+    stops_df = load_stops(stops_path=stops_path)
 
     # 2) Load each dataset
     df_bus = load_bus_data(bus_path)
