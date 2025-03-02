@@ -3,6 +3,7 @@ import numpy as np
 import folium
 from folium.plugins import HeatMap
 from folium.plugins import MarkerCluster
+import matplotlib.pyplot as plt
 
 #####################################
 # 1) Risk Map with XGBoost Probability
@@ -15,41 +16,39 @@ def predict_risk_for_map(df, clf_model, feature_cols=None, lat_col="stop_lat", l
       - lat/lon columns (default: 'stop_lat', 'stop_lon')
     and a trained XGBoost classifier (clf_model) that can do predict_proba().
     
-    1) Label-encodes 'mode' and 'route_or_line' to match training (warning: may differ if not the same dataset).
+    1) Label-encodes 'mode' and 'route_or_line' to match training.
     2) Builds an X matrix of your classification features.
     3) Gets predicted probability of delay (class=1).
-    4) Merges lat/lon + predicted_risk.
-
-    Returns a DataFrame with columns: [lat, lon, predicted_risk, location, etc.].
+    4) Returns df_map with columns: [lat, lon, predicted_risk, location, etc.].
     """
+    from sklearn.preprocessing import LabelEncoder
 
-    # If the user hasn't specified which features, we assume these five
     if feature_cols is None:
+        # Default feature columns (adjust as needed to match your training)
         feature_cols = ["hour", "month", "is_weekend", "mode", "route_or_line"]
-
-    # Check columns exist
-    missing = [c for c in feature_cols if c not in df.columns]
-    if missing:
-        print("Risk map: missing feature columns:", missing)
-        return pd.DataFrame()
-
+    
     # Ensure lat/lon exist
     if lat_col not in df.columns or lon_col not in df.columns:
         print(f"No lat/lon columns found: {lat_col}, {lon_col} in df.")
+        return pd.DataFrame()
+
+    # Check for missing required feature columns
+    missing = [c for c in feature_cols if c not in df.columns]
+    if missing:
+        print("Risk map: missing feature columns:", missing)
         return pd.DataFrame()
 
     # Make a copy
     df_map = df.copy()
 
     # Label-encode 'mode' and 'route_or_line'
-    from sklearn.preprocessing import LabelEncoder
     le_mode = LabelEncoder()
     le_route = LabelEncoder()
 
     df_map["mode_enc"] = le_mode.fit_transform(df_map["mode"].astype(str))
     df_map["route_or_line_enc"] = le_route.fit_transform(df_map["route_or_line"].astype(str))
 
-    # Build the classification matrix
+    # Build classification matrix
     X_map = pd.DataFrame({
         "hour": df_map["hour"],
         "month": df_map["month"],
@@ -70,9 +69,10 @@ def predict_risk_for_map(df, clf_model, feature_cols=None, lat_col="stop_lat", l
     df_map["lat"] = df_map[lat_col]
     df_map["lon"] = df_map[lon_col]
 
-    # Drop missing lat/lon
+    # Drop rows missing lat/lon or risk
     df_map.dropna(subset=["lat", "lon", "predicted_risk"], inplace=True)
     return df_map
+
 
 def plot_risk_map(risk_df, location_col="location", output_html="risk_map.html"):
     """
@@ -80,12 +80,11 @@ def plot_risk_map(risk_df, location_col="location", output_html="risk_map.html")
     Requires columns: [lat, lon, predicted_risk].
     We color-code markers by risk (green < 0.33 < orange < 0.66 < red).
     """
-
     if risk_df.empty:
         print("Risk DF is empty, cannot plot.")
         return None
 
-    # Center on Toronto
+    # Center on Toronto (adjust as you like)
     center = [43.6532, -79.3832]
     m = folium.Map(location=center, zoom_start=12)
     marker_cluster = MarkerCluster().add_to(m)
@@ -115,6 +114,7 @@ def plot_risk_map(risk_df, location_col="location", output_html="risk_map.html")
     print(f"Risk map saved to '{output_html}'.")
     return m
 
+
 #####################################
 # 2) HeatMap of Historical Incidents
 #####################################
@@ -128,15 +128,13 @@ def create_heatmap_with_markers(
 ):
     """
     Aggregates incidents by location, producing a HeatMap weighted by 'incidents'
-    and circle markers for each location. 
-    'df' should have columns: [lat_col, lon_col, location_col].
-    We'll do a groupby on location_col to count how many rows (incidents) each location has.
-
-    1) Group by location_col, get lat/lon from the first row, and 'incidents' = size.
-    2) Build a heat_data list for HeatMap.
-    3) Add circle markers color-coded by top 25% or not.
+    and circle markers for each location.
+    
+    Steps:
+      1) Group by 'location' => count how many rows (incidents).
+      2) Use HeatMap for a visual "hot spots" approach.
+      3) Add CircleMarkers for clarity.
     """
-
     # Drop missing lat/lon
     df = df.dropna(subset=[lat_col, lon_col])
     if df.empty:
@@ -151,16 +149,12 @@ def create_heatmap_with_markers(
     }).rename(columns={location_col: "incidents"}).reset_index()
 
     # Build base map
-    m = folium.Map(location=[43.7, -79.4], zoom_start=11, tiles='cartodbpositron')
+    m = folium.Map(location=[43.7, -79.4], zoom_start=11)
 
-    # Prepare heat_data
+    # Prepare data for HeatMap
     heat_data = []
     for _, row in grouped.iterrows():
-        heat_data.append([
-            row[lat_col],
-            row[lon_col],
-            row["incidents"]
-        ])
+        heat_data.append([row[lat_col], row[lon_col], row["incidents"]])
 
     HeatMap(
         data=heat_data,
@@ -175,8 +169,8 @@ def create_heatmap_with_markers(
         lat, lon = row[lat_col], row[lon_col]
         inc_count = row["incidents"]
         loc_name = row[location_col]
-
         color = "red" if inc_count > hi_threshold else "blue"
+
         folium.CircleMarker(
             location=[lat, lon],
             radius=5,
@@ -191,6 +185,7 @@ def create_heatmap_with_markers(
     print(f"Heatmap + markers saved to '{output_html}'.")
     return m
 
+
 #####################################
 # 3) Using Subway lat/lon from Excel
 #####################################
@@ -201,54 +196,45 @@ def create_subway_heatmap_from_excel(
     output_html="subway_heatmap.html"
 ):
     """
-    Similar to create_heatmap_with_markers, but merges station lat/lon from an Excel file first.
-    Then builds a heatmap & markers.
+    Similar to create_heatmap_with_markers, but merges station lat/lon from Excel first.
+    Then builds a heatmap & markers specifically for subways.
     """
-
     # Load incidents
     df_incidents = pd.read_csv(incidents_csv, dtype=str)
     if df_incidents.empty:
         print(f"No data in {incidents_csv}")
         return None
 
-    # e.g. rename 'Station' -> 'station' if needed
     df_incidents.rename(columns={"Station": "station"}, inplace=True, errors="ignore")
-    # Convert 'station' to str
     df_incidents["station"] = df_incidents["station"].astype(str).str.strip()
 
     # Load station lat/lon from Excel
     df_latlon = pd.read_excel(latlon_xlsx)
-    df_latlon.rename(columns={
-        "Station": "station",
-        "Latitude": "lat",
-        "Longitude": "lon"
-    }, inplace=True, errors="ignore")
-    # Convert to float
+    df_latlon.rename(columns={"Station": "station", "Latitude": "lat", "Longitude": "lon"}, inplace=True)
     df_latlon["lat"] = pd.to_numeric(df_latlon["lat"], errors="coerce")
     df_latlon["lon"] = pd.to_numeric(df_latlon["lon"], errors="coerce")
     df_latlon["station"] = df_latlon["station"].astype(str).str.strip()
 
-    # Merge
+    # Merge on station name
     df_merged = pd.merge(
         df_incidents,
         df_latlon[["station", "lat", "lon"]],
         on="station",
         how="left"
     )
-    # Drop rows missing lat/lon
     df_merged.dropna(subset=["lat", "lon"], inplace=True)
     if df_merged.empty:
         print("No station-lat/lon matches found.")
         return None
 
-    # Now do the groupby approach
+    # Group to get incidents per station
     grouped = df_merged.groupby("station").agg({
         "lat": "first",
         "lon": "first",
         "station": "size"
     }).rename(columns={"station": "incidents"}).reset_index()
 
-    m = folium.Map(location=[43.7, -79.4], zoom_start=11, tiles='cartodbpositron')
+    m = folium.Map(location=[43.7, -79.4], zoom_start=11)
     heat_data = [
         [row["lat"], row["lon"], row["incidents"]]
         for _, row in grouped.iterrows()
@@ -278,192 +264,60 @@ def create_subway_heatmap_from_excel(
     print(f"Subway Heatmap from Excel saved to '{output_html}'.")
     return m
 
-import matplotlib.pyplot as plt
-import pandas as pd
-import numpy as np
 
-def plot_actual_vs_predicted(
+###################################
+# 4) Modified: Bus Risk Map with Sampling
+###################################
+
+def make_bus_risk_map(
     df,
-    actual_col="delay_minutes",
-    predicted_col="predicted_delay"
+    clf_model,
+    feature_cols=None,
+    lat_col="stop_lat",
+    lon_col="stop_lon",
+    location_col="location",
+    output_html="bus_risk_map.html",
+    sample_fraction=0.1,  # <-- 10% by default
+    random_state=42
 ):
     """
-    Creates a scatter plot of Actual vs. Predicted delay.
-    Insight:
-      - Points along the diagonal indicate close agreement.
-      - Points far from the diagonal show where the prediction was off.
+    Creates a Folium risk map just for Bus mode,
+    but now we take a sample of the bus rows (sample_fraction) 
+    to avoid plotting too many points at once.
     """
-    # Filter rows with valid numeric data
-    data = df[[actual_col, predicted_col]].dropna()
-    if data.empty:
-        print(f"No valid rows to plot for {actual_col} vs {predicted_col}.")
-        return
+    # Filter only bus rows
+    df_bus = df[df["mode"] == "bus"].copy()
+    if df_bus.empty:
+        print("No rows for mode='bus'. Cannot generate bus risk map.")
+        return None
 
-    actual = data[actual_col]
-    predicted = data[predicted_col]
+    # SAMPLE: default 10%
+    df_bus = df_bus.sample(frac=sample_fraction, random_state=random_state)
 
-    plt.figure()
-    plt.scatter(actual, predicted, alpha=0.5)
-    min_val = min(actual.min(), predicted.min())
-    max_val = max(actual.max(), predicted.max())
-    # Diagonal line for reference
-    plt.plot([min_val, max_val], [min_val, max_val], 'r--')
+    # Compute predicted risk for bus data only
+    risk_df = predict_risk_for_map(
+        df=df_bus,
+        clf_model=clf_model,
+        feature_cols=feature_cols,
+        lat_col=lat_col,
+        lon_col=lon_col
+    )
+    if risk_df.empty:
+        print("Bus risk DataFrame came back empty. Check input columns or model.")
+        return None
 
-    plt.xlabel("Actual Delay")
-    plt.ylabel("Predicted Delay")
-    plt.title("Actual vs Predicted Delay")
-    plt.grid(True)
-    plt.show()
-
-
-def plot_most_delay_by_mode(df, mode_col="mode", delay_col="delay_minutes"):
-    """
-    Shows a bar chart of total delay (or average delay) by each transit mode.
-    Insight:
-      - Quickly identify which mode (bus, subway, streetcar, etc.)
-        tends to accumulate the most total delay.
-    """
-    # Choose sum or mean of delay based on your preference:
-    grouped = df.dropna(subset=[mode_col, delay_col]).groupby(mode_col)[delay_col].sum()
-
-    if grouped.empty:
-        print("No valid data to group by mode for delay.")
-        return
-
-    # Sort descending for clarity
-    grouped = grouped.sort_values(ascending=False)
-
-    plt.figure()
-    plt.bar(grouped.index.astype(str), grouped.values)
-    plt.xlabel("Mode")
-    plt.ylabel("Total Delay (minutes)")
-    plt.title("Most Delay by Mode")
-    plt.grid(True)
-    plt.show()
+    # Plot the map
+    m = plot_risk_map(
+        risk_df,
+        location_col=location_col,
+        output_html=output_html
+    )
+    return m
 
 
-def plot_place_most_delay(df, location_col="location", delay_col="delay_minutes", top_n=10):
-    """
-    Bar chart showing which places (locations) have the highest total delay.
-    Insight:
-      - Useful for spotting the worst-performing stops/stations.
-      - top_n defines how many top locations to display.
-    """
-    group = df.dropna(subset=[location_col, delay_col]).groupby(location_col)[delay_col].sum()
-    if group.empty:
-        print("No valid data to group by location for delay.")
-        return
-
-    # Sort descending by delay
-    sorted_delays = group.sort_values(ascending=False).head(top_n)
-
-    plt.figure()
-    plt.bar(sorted_delays.index.astype(str), sorted_delays.values)
-    plt.xlabel("Location")
-    plt.ylabel("Total Delay (minutes)")
-    plt.title(f"Top {top_n} Locations with Most Total Delay")
-    plt.xticks(rotation=45, ha="right")
-    plt.grid(True)
-    plt.tight_layout()
-    plt.show()
-
-
-def plot_day_of_week_most_delay(df, day_col="day_of_week", delay_col="delay_minutes"):
-    """
-    Bar chart showing the total delay by day of week (over one year or entire dataset).
-    Insight:
-      - Highlights which weekday or weekend day accumulates the highest delays.
-    Note:
-      - Ensure 'day_of_week' is a string or category (e.g., Monday, Tuesday, etc.)
-        or convert day numbers to names before plotting.
-    """
-    group = df.dropna(subset=[day_col, delay_col]).groupby(day_col)[delay_col].sum()
-    if group.empty:
-        print("No valid data to group by day_of_week for delay.")
-        return
-
-    # For a nicer x-axis order, map day names to a known sequence if needed:
-    # example ordering if your dataset uses full names:
-    day_order = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
-    # Filter out any days not present in the data
-    day_order = [d for d in day_order if d in group.index]
-
-    # Reindex to ensure a consistent M->Sun order
-    group = group.reindex(day_order)
-
-    plt.figure()
-    plt.bar(group.index.astype(str), group.values)
-    plt.xlabel("Day of Week")
-    plt.ylabel("Total Delay (minutes)")
-    plt.title("Total Delay by Day of Week")
-    plt.grid(True)
-    plt.show()
-
-
-def plot_relation_weather_delay(
-    df,
-    weather_col="temperature_2m",
-    delay_col="delay_minutes",
-    bins=20
-):
-    """
-    Displays a scatter of average delay vs. weather measurement (e.g., temperature).
-    Insight:
-      - Observe if higher/lower temperatures tend to correlate with larger delays.
-    Steps:
-      1) Bin the temperature range to reduce noise.
-      2) For each bin, compute the mean (or sum) delay.
-      3) Scatter/bars of binned temperature vs. average delay.
-    """
-    # Drop rows with missing data
-    data = df.dropna(subset=[weather_col, delay_col]).copy()
-    if data.empty:
-        print(f"No valid data to relate {weather_col} and {delay_col}.")
-        return
-
-    # Bin the weather column
-    data["weather_bin"] = pd.cut(data[weather_col], bins=bins)
-    grouped = data.groupby("weather_bin")[delay_col].mean()
-
-    # The x-values for plotting: midpoints of each bin
-    midpoints = []
-    for interval in grouped.index:
-        # interval is something like (0.0, 5.0], we want ~2.5
-        mid = (interval.left + interval.right) / 2.0
-        midpoints.append(mid)
-
-    # Build the scatter
-    plt.figure()
-    plt.scatter(midpoints, grouped.values, alpha=0.7)
-    plt.xlabel(f"Binned {weather_col}")
-    plt.ylabel(f"Avg {delay_col}")
-    plt.title(f"Average Delay vs. {weather_col} (binned)")
-    plt.grid(True)
-    plt.show()
-
-
-def plot_when_most_delay_per_day(df, time_col="timestamp", delay_col="delay_minutes"):
-    """
-    Plots a bar chart of total delay by hour-of-day.
-    Insight:
-      - Identifies peak hours for delays within a single day or across the entire dataset.
-    Note:
-      - For a single year's data, grouping by hour is typically enough to see daily patterns.
-    """
-    # Create an hour column
-    df["hour"] = df[time_col].dt.hour
-    group = df.dropna(subset=["hour", delay_col]).groupby("hour")[delay_col].sum()
-    if group.empty:
-        print("No valid data to group by hour of day.")
-        return
-
-    plt.figure()
-    plt.bar(group.index.astype(str), group.values)
-    plt.xlabel("Hour of Day (0-23)")
-    plt.ylabel("Total Delay (minutes)")
-    plt.title("When Most Delay Occurred (By Hour of Day)")
-    plt.grid(True)
-    plt.show()
+#####################################
+# 5) Modified: Risk Map for All Modes with Sampling
+#####################################
 
 def make_risk_map_for_all_modes(
     df,
@@ -472,25 +326,22 @@ def make_risk_map_for_all_modes(
     lat_col="stop_lat",
     lon_col="stop_lon",
     location_col="location",
-    output_html="all_modes_risk_map.html"
+    output_html="all_modes_risk_map.html",
+    sample_fraction=0.1,  # <-- 10% by default
+    random_state=42
 ):
     """
-    Generates a Folium-based risk map for all transit modes in the dataset.
-    Steps:
-      1) Uses 'predict_risk_for_map' to compute probability of delay for each row.
-      2) Calls 'plot_risk_map' to display the results on a map with color-coded markers.
-    Inputs:
-      df           : DataFrame containing your enriched data.
-      clf_model    : A trained classifier that implements 'predict_proba'.
-      feature_cols : List of features that your model expects (e.g. ['hour', 'month', 'is_weekend', 'mode', 'route_or_line']).
-      lat_col      : Name of the latitude column in df (defaults to 'stop_lat').
-      lon_col      : Name of the longitude column in df (defaults to 'stop_lon').
-      location_col : Name of a descriptive location column in df (defaults to 'location').
-      output_html  : HTML file to save the interactive map.
+    Generates a Folium-based risk map for every mode in df (bus, streetcar, subway, etc.),
+    but samples the data to 'sample_fraction' to avoid overcrowding.
     """
-    # 1) Compute predicted risk
+    # SAMPLE: default 10% of entire dataset
+    df_sample = df.sample(frac=sample_fraction, random_state=random_state)
+    if df_sample.empty:
+        print("Sampling returned no data. Adjust sample_fraction or check your dataset.")
+        return None
+
     risk_df = predict_risk_for_map(
-        df=df,
+        df=df_sample,
         clf_model=clf_model,
         feature_cols=feature_cols,
         lat_col=lat_col,
@@ -500,10 +351,18 @@ def make_risk_map_for_all_modes(
         print("No risk data returned. Check if your DataFrame has the required columns.")
         return None
 
-    # 2) Plot the map
     m = plot_risk_map(
         risk_df,
         location_col=location_col,
         output_html=output_html
     )
     return m
+
+
+#####################################
+# Example (for local testing)
+#####################################
+
+if __name__ == "__main__":
+    # Example usage or local testing (you can remove or adjust as needed).
+    print("visualization.py can be imported into your pipeline. Example usage in docstrings.")

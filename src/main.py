@@ -27,7 +27,8 @@ from visualization import (
     plot_place_most_delay,
     plot_day_of_week_most_delay,
     plot_relation_weather_delay,
-    plot_when_most_delay_per_day
+    plot_when_most_delay_per_day,
+    make_risk_map_for_all_modes
 )
 
 from sklearn.metrics import confusion_matrix
@@ -109,6 +110,21 @@ def main():
     )
     # => This merges your raw subway CSV with station coords from the Excel, 
     #    then produces "subway_heatmap.html".
+
+    make_risk_map_for_all_modes(
+        df=enriched_df,
+        clf_model=clf_model,
+        feature_cols=["hour", "month", "is_weekend", "mode", "route_or_line"],
+        output_html="all_modes_risk_map.html"
+    )
+
+    create_heatmap_with_markers(
+        df=enriched_df,
+        lat_col="stop_lat",
+        lon_col="stop_lon",
+        location_col="location",
+        output_html="all_modes_heatmap.html"
+    )
 
     plot_actual_vs_predicted(combined_df, actual_col="delay_minutes", predicted_col="my_model_prediction")
     plot_most_delay_by_mode(combined_df)
